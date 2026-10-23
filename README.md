@@ -1,63 +1,117 @@
 # analysis
 
-Terminal tools for **log analysis** and **static malware analysis**, the same versions on any Linux machine with Nix. Nothing gets installed; everything comes pinned from `flake.lock`.
+Terminal tools for **log analysis** and **static malware analysis**, with the same pinned versions on any Linux machine with Nix. Nothing is installed on the machine.
 
-Needs Nix with flakes enabled (`experimental-features = nix-command flakes`). x86_64 and aarch64 Linux.
+**Requirements:** Linux (x86_64 or aarch64) and Nix with flakes enabled (`experimental-features = nix-command flakes`). The first start downloads a few GB.
 
-## Just the tools (dev shell)
+- [Quick start](#quick-start)
+- [Which tool for what](#which-tool-for-what)
+- [The VM](#the-vm)
+- [Maintaining this repo](#maintaining-this-repo)
 
-```
-nix develop github:Phynik/analysis          # everything
-nix develop github:Phynik/analysis#logs     # log tools only
-nix develop github:Phynik/analysis#static   # static analysis only
-```
+---
 
-Good for logs and harmless files. **Don't open malware samples here**: the shell runs directly on the host, so a parser bug in a tool or an accidental `./sample` hits the real machine. Use the VM for samples.
+## Quick start
 
-## Isolated VM for samples
+| Task | Command |
+|---|---|
+| All tools in a shell | `nix develop github:Phynik/analysis` |
+| Only log tools | `nix develop github:Phynik/analysis#logs` |
+| Only static analysis tools | `nix develop github:Phynik/analysis#static` |
+| Isolated VM with a sample | `nix run github:Phynik/analysis#vm -- ./sample.zip` |
+
+Leave a shell with `exit` or `Ctrl+D`; leave the VM with `sudo poweroff`.
+
+> **Shell or VM?** The shell runs directly on your machine. Use it for logs and files you trust. Open anything that might be malicious **only in the VM**: a crafted file can exploit a bug in an analysis tool, and in the shell that would hit your real system.
+
+---
+
+## Which tool for what
+
+### Logs
+
+| I want to… | Tool | Example |
+|---|---|---|
+| Browse and filter a log file | `lnav` | `lnav /var/log/syslog`; recognises syslog, journald, web server and JSON logs, `/` searches, `:filter-in` filters |
+| Search many or huge files | `rg` | `rg -i "failed password" logs/` |
+| Search inside `.gz`/`.zip` archives | `ug` | `ug -z "error" logs.tar.gz` |
+| Pick fields from JSON logs | `jq` | `jq -r 'select(.level=="error") \| .msg' app.jsonl` |
+| Read or convert YAML | `yq` | `yq '.services' config.yaml` |
+| Count, sort, group CSV/TSV/JSON | `mlr` | `mlr --icsv --opprint count-distinct -f src_ip access.csv` |
+| SQL over large log files, joins, time buckets | `duckdb` | `duckdb -c "SELECT status, count(*) FROM 'access.csv' GROUP BY 1"` |
+| Explore a table interactively | `vd` | `vd access.csv`; `Shift+F` on a column shows value frequencies |
+| Search Windows event logs (`.evtx`) | `chainsaw` | `chainsaw search "mimikatz" -i Security.evtx` |
+
+`chainsaw hunt`, which detects attacks with Sigma rules, needs rules and a mapping file that aren't included. `chainsaw search` works without them.
+
+### Static analysis
+
+Roughly in the order you'd use them on a new sample:
+
+| I want to… | Tool | Example |
+|---|---|---|
+| Unpack a sample archive | `7zz` | `7zz x sample.zip -pinfected -o./work` |
+| Know what kind of file it is | `file`, `diec` | `diec sample.exe` also shows compiler, packer and protector |
+| Hashes and similarity to other samples | `sha256sum`, `ssdeep` | `ssdeep -b *.exe` |
+| Read document and image metadata | `exiftool` | `exiftool invoice.pdf` |
+| Find embedded files (firmware, droppers) | `binwalk` | `binwalk -e firmware.bin` |
+| Unpack UPX | `upx` | `upx -d -o unpacked.exe sample.exe` (when `diec` says UPX) |
+| Quick look at the strings | `strings` | `strings -n 8 sample.bin` |
+| Decode hidden and obfuscated strings | `floss` | `floss sample.exe`; Windows PE and shellcode only |
+| See what the binary is capable of | `capa` | `capa sample.exe`; ATT&CK techniques and behaviour, for PE, ELF, .NET and shellcode |
+| Analyse Office documents and macros | `olevba`, `oleid`, `mraptor`, `rtfobj`, `msodde` | `olevba invoice.docm` extracts and rates VBA macros |
+| Look at ELF headers and sections | `readelf`, `objdump` | `readelf -h -S sample.elf` |
+| Look at bytes | `hexyl` | `hexyl -n 256 sample.bin` |
+| Disassemble and reverse | `r2`, `rizin` | `r2 -A sample.elf`, then `afl` lists functions, `pdf @ main` disassembles |
+| Write and test detection rules | `yr`, `yara` | `yr scan rules.yar samples/`; yara-x (`yr`) is faster, `yara` for older rule sets |
+| Script your own checks | `python` | `pefile`, `lief` (PE, ELF, Mach-O), `yara` and `oletools` are importable |
+
+---
+
+## The VM
 
 ```
 nix run github:Phynik/analysis#vm -- ./samples     # a folder or a single file
 ```
 
-Boots a NixOS VM in the terminal (about 2–3 minutes, mostly building its own copy of the Nix store) and logs in as `analyst`.
+Boots in your terminal in about 2–3 minutes (most of that is building its own copy of the Nix store) and logs you in as `analyst`. Every start is a fresh system.
 
-| Inside the VM | |
+| Path in the VM | What it is |
 |---|---|
-| `/input` | the file or folder you passed, **read-only and `noexec`**: samples can't be changed or run from there |
-| `/results` | copied to `./analysis-results/` on the host when the VM shuts down |
-| `~/work` | scratch space, gone after shutdown |
-
-```
-7zz x /input/sample.zip -pinfected -o$HOME/work    # unpack a sample
-sudo poweroff                                       # shut down and copy results out
-```
+| `/input` | The file or folder you passed. **Read-only and `noexec`**: samples can't be changed or run from there. |
+| `~/work` | Scratch space for unpacking. Deleted on shutdown. |
+| `/results` | Notes, reports, extracted strings. Copied to `./analysis-results/` on the host after `sudo poweroff`. |
 
 **Isolation:**
-- No network card at all (`-nic none`), not just a disabled network.
-- No shared folders, and its own Nix store image instead of the host's store.
-- No graphics device: the console is the terminal you started it from.
-- Every start is a fresh system; the root disk is deleted afterwards.
-- Results come out as plain data: symlinks are dropped and execute bits removed. Still, **never put samples into `/results`**; it's for notes, reports and extracted strings.
+- No network card at all (`-nic none`), not just a disabled connection.
+- No shared folders, and its own Nix store instead of the host's.
+- No graphics device: the console is your terminal.
+- The root disk is deleted after every run.
+- Results come out as plain data: symlinks are dropped and execute bits removed.
 
-Static analysis doesn't run the sample, so the remaining risk is a bug in an analysis tool that a crafted file exploits. The VM contains that. It is not meant for dynamic analysis (running samples): Linux malware expects a typical distribution (`/usr/bin/wget`, a writable `/etc/systemd/system`, cron), which NixOS doesn't have, so most samples would just fail. Use a dedicated Ubuntu or REMnux VM with a fake network (e.g. INetSim) for that.
+**Never put samples into `/results`.** It's the only way out of the VM.
 
-## Tools
+**Static, not dynamic.** The VM is for looking at samples, not running them. Linux malware expects a typical distribution (`/usr/bin/wget`, a writable `/etc/systemd/system`, cron), which NixOS doesn't have, so most samples would just fail. For dynamic analysis, use a dedicated Ubuntu or REMnux VM with a fake network such as INetSim.
 
-**Logs:** `lnav`, `jq`, `yq`, `mlr` (miller), `rg` (ripgrep), `ug` (ugrep, `-z` for compressed files), `duckdb` (SQL over CSV/JSON), `vd` (visidata), `chainsaw` (Windows .evtx with Sigma rules)
+---
 
-**Static:** `file`, `strings`/`readelf`/`objdump`, `hexyl`, `r2` (radare2), `rizin`, `yara`, `yr` (yara-x), `capa` (with Mandiant's rules and signatures), `floss`, `diec` (Detect It Easy), `binwalk`, `upx`, `ssdeep`, `exiftool`, `7zz`, and `python` with `pefile`, `oletools`, `lief`, `yara`
+## Maintaining this repo
 
-To add a tool: put it in `tools.nix` (both the shells and the VM use that list), check `nix develop` and `nix run .#vm`, commit, push.
+| File | Contents |
+|---|---|
+| `tools.nix` | The tool lists, used by both the shells and the VM |
+| `vm.nix` | The VM: isolation, disks, user |
+| `flake.nix` | Outputs and the `nix run …#vm` script |
 
-## Updating
-
+**Add a tool:** add it to `tools.nix`, check with `nix develop` and `nix run .#vm`, then commit and push:
 ```
-nix flake update && nix develop --command capa --version
-jj commit -m "flake: update inputs" && jj bookmark set main -r @- && jj git push
+jj commit -m "add <tool>"
+jj bookmark set main -r @-
+jj git push
 ```
 
-## Known limitations
+**Update all tools:** `nix flake update`, check that `nix develop --command capa --version` still works, then commit and push the same way.
 
-- `register-nix-paths.service` fails in the VM (an effect of the separate store image). It only matters for `nix` commands *inside* the VM, not for the tools.
-- `capa` takes from seconds to several minutes, depending on the size of the binary.
+**Known limitations:**
+- `register-nix-paths.service` fails in the VM, a side effect of its separate Nix store. It only affects `nix` commands inside the VM, not the tools.
+- `capa` takes from a few seconds to several minutes, depending on the size of the binary.
