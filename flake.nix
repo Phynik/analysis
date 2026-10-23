@@ -56,15 +56,15 @@
                   exit 1
                 fi
                 mksquashfs "$src" "$tmp/input.sqfs" -quiet -no-progress -all-root -no-xattrs
-                opts="-drive file=$tmp/input.sqfs,format=raw,if=virtio,readonly=on,serial=input"
+                opts="-drive file=$tmp/input.sqfs,format=raw,if=none,id=input,readonly=on -device virtio-blk-pci,drive=input,serial=input"
               fi
 
               # empty results disk, owned by the analyst user (uid 1000) inside the VM
               truncate -s 1G "$tmp/results.img"
               mkfs.ext4 -q -E root_owner=1000:100 "$tmp/results.img"
-              opts="$opts -drive file=$tmp/results.img,format=raw,if=virtio,serial=results"
+              opts="$opts -drive file=$tmp/results.img,format=raw,if=none,id=results -device virtio-blk-pci,drive=results,serial=results"
 
-              NIX_DISK_IMAGE="$tmp/root.qcow2" QEMU_OPTS="$opts" ${vm}/bin/run-nixos-vm
+              NIX_DISK_IMAGE="$tmp/root.qcow2" QEMU_OPTS="$opts" ${vm}/bin/run-analysis-vm
 
               # copy results out as plain data: no symlinks, nothing executable
               mkdir -p "$tmp/out"
@@ -73,7 +73,7 @@
               rm -rf "$tmp/out/lost+found"
               if [ -n "$(ls -A "$tmp/out")" ]; then
                 mkdir -p "$results"
-                chmod -R a-x,u+rwX "$tmp/out"
+                find "$tmp/out" -type f -exec chmod a-x,u+rw {} +
                 cp -r "$tmp/out/." "$results/"
                 echo "==> results copied to $results"
               fi

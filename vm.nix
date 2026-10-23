@@ -26,16 +26,17 @@ in
     sharedDirectories = lib.mkForce { };
   };
 
-  # the run script attaches these disks by serial; nofail so the VM boots without them
-  fileSystems."/input" = {
+  # the run script attaches these disks by serial; nofail so the VM boots without them.
+  # virtualisation.fileSystems, because the VM module replaces plain fileSystems with its own
+  virtualisation.fileSystems."/input" = {
     device = "/dev/disk/by-id/virtio-input";
     fsType = "squashfs";
-    options = [ "ro" "nofail" "noexec" "nosuid" "nodev" "x-systemd.device-timeout=2s" ];
+    options = [ "ro" "nofail" "noexec" "nosuid" "nodev" ];
   };
-  fileSystems."/results" = {
+  virtualisation.fileSystems."/results" = {
     device = "/dev/disk/by-id/virtio-results";
     fsType = "ext4";
-    options = [ "nofail" "noexec" "nosuid" "nodev" "x-systemd.device-timeout=2s" ];
+    options = [ "nofail" "noexec" "nosuid" "nodev" ];
   };
 
   # nothing to log in to remotely, so log the analyst in on the console directly
