@@ -40,7 +40,7 @@ sudo poweroff                                       # shut down and copy results
 - Every start is a fresh system; the root disk is deleted afterwards.
 - Results come out as plain data: symlinks are dropped and execute bits removed. Still, **never put samples into `/results`**; it's for notes, reports and extracted strings.
 
-Static analysis doesn't run the sample, so the remaining risk is a bug in an analysis tool that a crafted file exploits. The VM contains that. Don't use it for dynamic analysis (running samples): see the notes on that in the conversation that led to this repo, or use a dedicated Ubuntu/REMnux VM with a fake network.
+Static analysis doesn't run the sample, so the remaining risk is a bug in an analysis tool that a crafted file exploits. The VM contains that. It is not meant for dynamic analysis (running samples): Linux malware expects a typical distribution (`/usr/bin/wget`, a writable `/etc/systemd/system`, cron), which NixOS doesn't have, so most samples would just fail. Use a dedicated Ubuntu or REMnux VM with a fake network (e.g. INetSim) for that.
 
 ## Tools
 
