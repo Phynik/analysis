@@ -26,6 +26,7 @@ in
     pkgs.duckdb # SQL over CSV/JSON/parquet logs
     pkgs.visidata # vd: interactive table viewer
     pkgs.chainsaw # Windows event logs (.evtx) with Sigma rules
+    pkgs.wireshark-cli # tshark, capinfos, editcap, mergecap: pcap/pcapng captures
   ];
 
   static = [

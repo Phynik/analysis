@@ -41,6 +41,9 @@ Leave a shell with `exit` or `Ctrl+D`; leave the VM with `sudo poweroff`.
 | SQL over large log files, joins, time buckets | `duckdb` | `duckdb -c "SELECT status, count(*) FROM 'access.csv' GROUP BY 1"` |
 | Explore a table interactively | `vd` | `vd access.csv`; `Shift+F` on a column shows value frequencies |
 | Search Windows event logs (`.evtx`) | `chainsaw` | `chainsaw search "mimikatz" -i Security.evtx` |
+| Overview of a network capture | `capinfos`, `tshark` | `capinfos traffic.pcap`; `tshark -r traffic.pcap -qz conv,ip` lists who talked to whom |
+| Filter packets and pull out fields | `tshark` | `tshark -r traffic.pcap -Y dns -T fields -e dns.qry.name \| sort \| uniq -c`; same filter syntax as Wireshark |
+| Extract files from a capture | `tshark` | `tshark -r traffic.pcap -q --export-objects http,./objects` (also `smb`, `tftp`, `imf`) |
 
 `chainsaw hunt`, which detects attacks with Sigma rules, needs rules and a mapping file that aren't included. `chainsaw search` works without them.
 
